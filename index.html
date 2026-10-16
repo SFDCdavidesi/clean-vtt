@@ -3,168 +3,408 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Limpiador y Previsualizador de VTT</title>
+    <title>CleanVTT Studio — Extractor & Limpiador</title>
     <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 820px;
-            margin: 30px auto;
-            padding: 20px;
-            background-color: #f4f5f7;
-            color: #222;
+        :root {
+            --bg-page: #0f172a;
+            --surface-card: #1e293b;
+            --surface-hover: #334155;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --accent-soft: rgba(16, 185, 129, 0.15);
+            --radius-md: 12px;
+            --radius-lg: 18px;
         }
-        .card {
-            background: #ffffff;
-            padding: 25px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
-        }
-        h2 {
-            margin-top: 0;
-            color: #111;
-        }
-        input[type="file"] {
-            margin: 15px 0;
-            padding: 10px;
-            border: 1px dashed #bbb;
-            border-radius: 6px;
-            width: 100%;
+
+        * {
             box-sizing: border-box;
-            background: #fafafa;
+            margin: 0;
+            padding: 0;
         }
-        .options-group {
-            margin-bottom: 15px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 6px;
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .studio-container {
+            width: 100%;
+            max-width: 860px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 24px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .badge-gradient {
+            display: inline-block;
+            background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+            color: #022c22;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 5px 12px;
+            border-radius: 9999px;
+            margin-bottom: 12px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .header p {
+            color: var(--text-muted);
             font-size: 14px;
         }
-        .row-options {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
+
+        .card {
+            background-color: var(--surface-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
-        .options-group label {
+
+        /* Drag and Drop Zone */
+        .dropzone {
+            border: 2px dashed #475569;
+            border-radius: var(--radius-md);
+            padding: 36px 20px;
+            text-align: center;
             cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            transition: all 0.25s ease;
+            background: rgba(15, 23, 42, 0.4);
+            position: relative;
         }
-        .btn-primary {
-            background-color: #0b57d0;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 15px;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            width: 100%;
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--accent);
+            background: var(--accent-soft);
+            transform: translateY(-2px);
         }
-        .btn-primary:hover {
-            background-color: #0842a0;
+
+        .dropzone-icon {
+            font-size: 34px;
+            margin-bottom: 8px;
+            display: block;
+            color: var(--accent);
         }
-        .btn-secondary {
-            background-color: #1a73e8;
-            color: white;
-            border: none;
-            padding: 10px 18px;
+
+        .dropzone p {
             font-size: 14px;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
+            color: var(--text-muted);
         }
-        .btn-secondary:hover {
-            background-color: #1557b0;
+
+        .dropzone strong {
+            color: var(--text-main);
         }
-        #previewArea {
+
+        input[type="file"] {
             display: none;
         }
-        .preview-header {
+
+        /* Controles de Configuración */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 18px;
+        }
+
+        .custom-toggle {
+            background: #111827;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            user-select: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .custom-toggle:hover {
+            border-color: #64748b;
+        }
+
+        .custom-toggle input {
+            accent-color: var(--accent);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .custom-toggle span {
+            font-size: 13px;
+            color: var(--text-main);
+            font-weight: 500;
+        }
+
+        /* Botones */
+        .btn-action {
+            width: 100%;
+            margin-top: 20px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 15px;
+            border: none;
+            border-radius: var(--radius-md);
+            padding: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+            transform: translateY(-1px);
+        }
+
+        .btn-action:active {
+            transform: translateY(1px);
+        }
+
+        /* Área de Previsualización */
+        #previewArea {
+            display: none;
+            animation: fadeIn 0.3s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .preview-topbar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
         }
-        .stats {
+
+        .preview-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stats-pills {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .pill {
+            background: #0f172a;
+            border: 1px solid var(--border-color);
+            color: var(--accent);
+            font-size: 12px;
+            font-family: monospace;
+            padding: 3px 8px;
+            border-radius: 6px;
+        }
+
+        .toolbar-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-secondary {
+            background: #334155;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            padding: 7px 14px;
+            border-radius: 6px;
             font-size: 13px;
-            color: #666;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
         }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .btn-download {
+            background: var(--accent);
+            color: #022c22;
+            border: none;
+            padding: 7px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-download:hover {
+            opacity: 0.9;
+        }
+
         textarea {
             width: 100%;
             height: 380px;
-            padding: 12px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 6px;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 16px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 13px;
-            line-height: 1.5;
+            line-height: 1.6;
             resize: vertical;
-            background-color: #fafafa;
-        }
-        textarea:focus {
             outline: none;
-            border-color: #0b57d0;
-            background: #fff;
+            transition: border-color 0.2s;
+        }
+
+        textarea:focus {
+            border-color: var(--accent);
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>Limpiador de Subtítulos VTT</h2>
-        <p>Sube tu archivo <code>.vtt</code> para procesarlo y previsualizarlo antes de descargar.</p>
-        
-        <input type="file" id="fileInput" accept=".vtt">
+    <div class="studio-container">
+        <header class="header">
+            <span class="badge-gradient">VTT Parser Engine</span>
+            <h1>CleanVTT Studio</h1>
+            <p>Procesa subtítulos VTT a texto plano con formateo inteligente</p>
+        </header>
 
-        <div class="options-group">
-            <label>
-                <input type="checkbox" id="keepTimestamps">
-                <strong>Conservar marcas de tiempo</strong> (ej. <code>[00:03:58 --> 00:03:59] Texto...</code>)
-            </label>
-            <div class="row-options">
-                <label>
+        <section class="card">
+            <!-- Dropzone Interactiva -->
+            <div class="dropzone" id="dropArea">
+                <span class="dropzone-icon">📥</span>
+                <p>Arrastra tu archivo <strong>.vtt</strong> aquí o <strong>haz clic para examinar</strong></p>
+                <input type="file" id="fileInput" accept=".vtt">
+            </div>
+
+            <!-- Controles y Opciones -->
+            <div class="controls-grid">
+                <label class="custom-toggle">
+                    <input type="checkbox" id="keepTimestamps">
+                    <span>Conservar Marcas de Tiempo</span>
+                </label>
+                
+                <label class="custom-toggle">
                     <input type="radio" name="formatOption" value="single" checked>
-                    Salto simple (línea por línea)
+                    <span>Salto Simple (Línea x bloque)</span>
                 </label>
-                <label>
+
+                <label class="custom-toggle">
                     <input type="radio" name="formatOption" value="double">
-                    Doble salto (separar bloques con línea en blanco)
+                    <span>Doble Salto (Separar párrafos)</span>
                 </label>
             </div>
-        </div>
 
-        <button class="btn-primary" onclick="procesarYPrevisualizar()">Cargar y Previsualizar</button>
-    </div>
+            <button class="btn-action" onclick="procesarYPrevisualizar()">Procesar y Previsualizar</button>
+        </section>
 
-    <div class="card" id="previewArea">
-        <div class="preview-header">
-            <div>
-                <strong id="previewFileName">archivo_limpio.txt</strong>
-                <div class="stats" id="statsText">0 bloques procesados | 0 caracteres</div>
+        <!-- Previsualización y Descarga -->
+        <section class="card" id="previewArea">
+            <div class="preview-topbar">
+                <div>
+                    <div class="preview-title">
+                        <span>📄</span>
+                        <span id="previewFileName">output.txt</span>
+                    </div>
+                    <div class="stats-pills" style="margin-top: 6px;">
+                        <span class="pill" id="statBlocks">0 bloques</span>
+                        <span class="pill" id="statChars">0 caracteres</span>
+                    </div>
+                </div>
+
+                <div class="toolbar-buttons">
+                    <button class="btn-secondary" onclick="copiarAlPortapapeles()" id="btnCopy">Copiar</button>
+                    <button class="btn-download" onclick="descargarDesdePreview()">Descargar TXT</button>
+                </div>
             </div>
-            <button class="btn-secondary" onclick="descargarDesdePreview()">Descargar TXT</button>
-        </div>
-        <textarea id="outputViewer" placeholder="Aquí aparecerá el texto procesado..."></textarea>
+
+            <textarea id="outputViewer" spellcheck="false" placeholder="El texto limpio se mostrará aquí..."></textarea>
+        </section>
     </div>
 
     <script>
         let currentFileName = "subtitulos_limpio.txt";
+        let archivoSeleccionado = null;
 
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+
+        // Drag & Drop Handlers
+        dropArea.addEventListener('click', () => fileInput.click());
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.classList.add('dragover');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropArea.classList.remove('dragover');
+            }, false);
+        });
+
+        dropArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                actualizarNombreDropzone(files[0].name);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                actualizarNombreDropzone(fileInput.files[0].name);
+            }
+        });
+
+        function actualizarNombreDropzone(nombre) {
+            dropArea.querySelector('p').innerHTML = `Archivo cargado: <strong>${nombre}</strong>`;
+        }
+
+        // Lógica de procesamiento
         function procesarYPrevisualizar() {
-            const input = document.getElementById('fileInput');
-            if (input.files.length === 0) {
-                alert('Por favor, selecciona un archivo .vtt primero.');
+            if (fileInput.files.length === 0) {
+                alert('Por favor selecciona o arrastra un archivo .vtt primero.');
                 return;
             }
 
-            const file = input.files[0];
+            const file = fileInput.files[0];
             const keepTimestamps = document.getElementById('keepTimestamps').checked;
             currentFileName = file.name.replace(/\.[^/.]+$/, "") + (keepTimestamps ? "_con_tiempos.txt" : "_limpio.txt");
 
@@ -174,13 +414,14 @@
                 const separador = document.querySelector('input[name="formatOption"]:checked').value === 'double' ? '\n\n' : '\n';
                 const { texto, totalBloques } = limpiarVTT(contenido, separador, keepTimestamps);
 
+                // Renderizar
                 const previewArea = document.getElementById('previewArea');
                 const outputViewer = document.getElementById('outputViewer');
-                const statsText = document.getElementById('statsText');
                 const previewFileName = document.getElementById('previewFileName');
 
                 previewFileName.textContent = currentFileName;
-                statsText.textContent = `${totalBloques} bloques procesados | ${texto.length} caracteres`;
+                document.getElementById('statBlocks').textContent = `${totalBloques} bloques`;
+                document.getElementById('statChars').textContent = `${texto.length} caracteres`;
                 outputViewer.value = texto;
 
                 previewArea.style.display = 'block';
@@ -193,11 +434,10 @@
         function limpiarVTT(texto, separador, mantenerTiempos) {
             const lineas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
             const bloques = [];
-            
             let tiempoActual = "";
             let bufferTexto = [];
 
-            function guardarBloque() {
+            function volcarBloque() {
                 if (bufferTexto.length > 0) {
                     const textoUnido = bufferTexto.join(' ');
                     if (mantenerTiempos && tiempoActual) {
@@ -213,36 +453,30 @@
             for (let linea of lineas) {
                 const lineaTrim = linea.trim();
 
-                // Separador de bloque VTT
                 if (lineaTrim === '') {
-                    guardarBloque();
+                    volcarBloque();
                     continue;
                 }
 
-                // Filtrar metadatos iniciales
                 if (lineaTrim.startsWith('WEBVTT') || lineaTrim.startsWith('NOTE')) continue;
 
-                // Captura de timestamps
                 if (lineaTrim.includes('-->')) {
-                    // Limpiamos los milisegundos si se desea un formato más corto, o dejamos la marca limpia:
                     tiempoActual = lineaTrim.split(' ')[0] + ' --> ' + lineaTrim.split(' ')[2];
                     continue;
                 }
 
-                // Filtrar UUIDs o números identificadores de línea
                 if (/^[a-fA-F0-9\-]+(-\d+)?$/.test(lineaTrim)) continue;
                 if (/^\d+$/.test(lineaTrim)) continue;
 
-                // Quitar etiquetas inline si existieran (ej. <v Persona>, <b>)
                 const textoLimpio = lineaTrim.replace(/<\/?[^>]+(>|$)/g, "");
                 if (textoLimpio) {
                     bufferTexto.push(textoLimpio);
                 }
             }
 
-            guardarBloque();
+            volcarBloque();
 
-            // Deduplicar líneas consecutivas idénticas
+            // Deduplicación consecutiva
             const bloquesFiltrados = bloques.filter((item, index) => {
                 return index === 0 || item !== bloques[index - 1];
             });
@@ -253,10 +487,26 @@
             };
         }
 
+        function copiarAlPortapapeles() {
+            const texto = document.getElementById('outputViewer').value;
+            if (!texto) return;
+
+            navigator.clipboard.writeText(texto).then(() => {
+                const btn = document.getElementById('btnCopy');
+                const originalText = btn.textContent;
+                btn.textContent = '¡Copiado!';
+                btn.style.color = '#10b981';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.style.color = '';
+                }, 1800);
+            });
+        }
+
         function descargarDesdePreview() {
             const texto = document.getElementById('outputViewer').value;
             if (!texto.trim()) {
-                alert('No hay texto para descargar.');
+                alert('No hay texto disponible para descargar.');
                 return;
             }
 
@@ -274,280 +524,4 @@
         }
     </script>
 </body>
-</html<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Limpiador y Previsualizador de VTT</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 820px;
-            margin: 30px auto;
-            padding: 20px;
-            background-color: #f4f5f7;
-            color: #222;
-        }
-        .card {
-            background: #ffffff;
-            padding: 25px 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
-            margin-bottom: 20px;
-        }
-        h2 {
-            margin-top: 0;
-            color: #111;
-        }
-        input[type="file"] {
-            margin: 15px 0;
-            padding: 10px;
-            border: 1px dashed #bbb;
-            border-radius: 6px;
-            width: 100%;
-            box-sizing: border-box;
-            background: #fafafa;
-        }
-        .options-group {
-            margin-bottom: 15px;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 6px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            font-size: 14px;
-        }
-        .row-options {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .options-group label {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-primary {
-            background-color: #0b57d0;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            font-size: 15px;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            width: 100%;
-        }
-        .btn-primary:hover {
-            background-color: #0842a0;
-        }
-        .btn-secondary {
-            background-color: #1a73e8;
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            font-size: 14px;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-        .btn-secondary:hover {
-            background-color: #1557b0;
-        }
-        #previewArea {
-            display: none;
-        }
-        .preview-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-        .stats {
-            font-size: 13px;
-            color: #666;
-        }
-        textarea {
-            width: 100%;
-            height: 380px;
-            padding: 12px;
-            box-sizing: border-box;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-size: 13px;
-            line-height: 1.5;
-            resize: vertical;
-            background-color: #fafafa;
-        }
-        textarea:focus {
-            outline: none;
-            border-color: #0b57d0;
-            background: #fff;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="card">
-        <h2>Limpiador de Subtítulos VTT</h2>
-        <p>Sube tu archivo <code>.vtt</code> para procesarlo y previsualizarlo antes de descargar.</p>
-        
-        <input type="file" id="fileInput" accept=".vtt">
-
-        <div class="options-group">
-            <label>
-                <input type="checkbox" id="keepTimestamps">
-                <strong>Conservar marcas de tiempo</strong> (ej. <code>[00:03:58 --> 00:03:59] Texto...</code>)
-            </label>
-            <div class="row-options">
-                <label>
-                    <input type="radio" name="formatOption" value="single" checked>
-                    Salto simple (línea por línea)
-                </label>
-                <label>
-                    <input type="radio" name="formatOption" value="double">
-                    Doble salto (separar bloques con línea en blanco)
-                </label>
-            </div>
-        </div>
-
-        <button class="btn-primary" onclick="procesarYPrevisualizar()">Cargar y Previsualizar</button>
-    </div>
-
-    <div class="card" id="previewArea">
-        <div class="preview-header">
-            <div>
-                <strong id="previewFileName">archivo_limpio.txt</strong>
-                <div class="stats" id="statsText">0 bloques procesados | 0 caracteres</div>
-            </div>
-            <button class="btn-secondary" onclick="descargarDesdePreview()">Descargar TXT</button>
-        </div>
-        <textarea id="outputViewer" placeholder="Aquí aparecerá el texto procesado..."></textarea>
-    </div>
-
-    <script>
-        let currentFileName = "subtitulos_limpio.txt";
-
-        function procesarYPrevisualizar() {
-            const input = document.getElementById('fileInput');
-            if (input.files.length === 0) {
-                alert('Por favor, selecciona un archivo .vtt primero.');
-                return;
-            }
-
-            const file = input.files[0];
-            const keepTimestamps = document.getElementById('keepTimestamps').checked;
-            currentFileName = file.name.replace(/\.[^/.]+$/, "") + (keepTimestamps ? "_con_tiempos.txt" : "_limpio.txt");
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const contenido = e.target.result;
-                const separador = document.querySelector('input[name="formatOption"]:checked').value === 'double' ? '\n\n' : '\n';
-                const { texto, totalBloques } = limpiarVTT(contenido, separador, keepTimestamps);
-
-                const previewArea = document.getElementById('previewArea');
-                const outputViewer = document.getElementById('outputViewer');
-                const statsText = document.getElementById('statsText');
-                const previewFileName = document.getElementById('previewFileName');
-
-                previewFileName.textContent = currentFileName;
-                statsText.textContent = `${totalBloques} bloques procesados | ${texto.length} caracteres`;
-                outputViewer.value = texto;
-
-                previewArea.style.display = 'block';
-                previewArea.scrollIntoView({ behavior: 'smooth' });
-            };
-
-            reader.readAsText(file, "UTF-8");
-        }
-
-        function limpiarVTT(texto, separador, mantenerTiempos) {
-            const lineas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-            const bloques = [];
-            
-            let tiempoActual = "";
-            let bufferTexto = [];
-
-            function guardarBloque() {
-                if (bufferTexto.length > 0) {
-                    const textoUnido = bufferTexto.join(' ');
-                    if (mantenerTiempos && tiempoActual) {
-                        bloques.push(`[${tiempoActual}] ${textoUnido}`);
-                    } else {
-                        bloques.push(textoUnido);
-                    }
-                    bufferTexto = [];
-                    tiempoActual = "";
-                }
-            }
-
-            for (let linea of lineas) {
-                const lineaTrim = linea.trim();
-
-                // Separador de bloque VTT
-                if (lineaTrim === '') {
-                    guardarBloque();
-                    continue;
-                }
-
-                // Filtrar metadatos iniciales
-                if (lineaTrim.startsWith('WEBVTT') || lineaTrim.startsWith('NOTE')) continue;
-
-                // Captura de timestamps
-                if (lineaTrim.includes('-->')) {
-                    // Limpiamos los milisegundos si se desea un formato más corto, o dejamos la marca limpia:
-                    tiempoActual = lineaTrim.split(' ')[0] + ' --> ' + lineaTrim.split(' ')[2];
-                    continue;
-                }
-
-                // Filtrar UUIDs o números identificadores de línea
-                if (/^[a-fA-F0-9\-]+(-\d+)?$/.test(lineaTrim)) continue;
-                if (/^\d+$/.test(lineaTrim)) continue;
-
-                // Quitar etiquetas inline si existieran (ej. <v Persona>, <b>)
-                const textoLimpio = lineaTrim.replace(/<\/?[^>]+(>|$)/g, "");
-                if (textoLimpio) {
-                    bufferTexto.push(textoLimpio);
-                }
-            }
-
-            guardarBloque();
-
-            // Deduplicar líneas consecutivas idénticas
-            const bloquesFiltrados = bloques.filter((item, index) => {
-                return index === 0 || item !== bloques[index - 1];
-            });
-
-            return {
-                texto: bloquesFiltrados.join(separador),
-                totalBloques: bloquesFiltrados.length
-            };
-        }
-
-        function descargarDesdePreview() {
-            const texto = document.getElementById('outputViewer').value;
-            if (!texto.trim()) {
-                alert('No hay texto para descargar.');
-                return;
-            }
-
-            const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-
-            a.href = url;
-            a.download = currentFileName;
-            document.body.appendChild(a);
-            a.click();
-
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-    </script>
-</body>
-</html>>
+</html>
