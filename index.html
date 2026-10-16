@@ -6,40 +6,71 @@
     <title>Limpiador de Archivos VTT</title>
     <style>
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            max-width: 600px;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 720px;
             margin: 40px auto;
             padding: 20px;
-            background-color: #f9f9f9;
-            color: #333;
+            background-color: #f4f5f7;
+            color: #222;
         }
         .container {
             background: white;
             padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: center;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        h2 {
+            margin-top: 0;
+            color: #111;
         }
         input[type="file"] {
-            margin: 20px 0;
+            margin: 16px 0;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px dashed #bbb;
+            border-radius: 6px;
             width: 100%;
             box-sizing: border-box;
+            background: #fafafa;
+        }
+        .options {
+            margin: 16px 0;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .options label {
+            display: block;
+            margin-bottom: 8px;
+            cursor: pointer;
         }
         button {
-            background-color: #0056b3;
+            background-color: #0b57d0;
             color: white;
             border: none;
             padding: 12px 24px;
-            font-size: 16px;
-            border-radius: 4px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            transition: background-color 0.2s;
+            width: 100%;
         }
         button:hover {
-            background-color: #004494;
+            background-color: #0842a0;
+        }
+        #preview {
+            margin-top: 24px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            max-height: 260px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 13px;
+            display: none;
         }
     </style>
 </head>
@@ -47,11 +78,24 @@
 
     <div class="container">
         <h2>Limpiador de Subtítulos VTT</h2>
-        <p>Sube tu archivo <strong>.vtt</strong> para extraer únicamente el texto limpio.</p>
+        <p>Sube tu archivo <code>.vtt</code> para extraer el texto estructurado por bloques y párrafos legibles.</p>
         
         <input type="file" id="fileInput" accept=".vtt">
-        <br>
-        <button onclick="procesarArchivo()">Convertir y Descargar TXT</button>
+
+        <div class="options">
+            <label>
+                <input type="radio" name="formatOption" value="single" checked>
+                Salto simple (un bloque/frase por línea)
+            </label>
+            <label>
+                <input type="radio" name="formatOption" value="double">
+                Doble salto (párrafos separados visualmente por una línea en blanco)
+            </label>
+        </div>
+
+        <button onclick="procesarArchivo()">Limpiar y Descargar TXT</button>
+
+        <div id="preview"></div>
     </div>
 
     <script>
@@ -67,38 +111,66 @@
 
             reader.onload = function(e) {
                 const contenido = e.target.result;
-                const textoLimpio = limpiarVTT(contenido);
-                
-                // Generar el nombre de archivo de salida
+                const separador = document.querySelector('input[name="formatOption"]:checked').value === 'double' ? '\n\n' : '\n';
+                const textoLimpio = limpiarVTT(contenido, separador);
+
+                // Mostrar previsualización
+                const preview = document.getElementById('preview');
+                preview.style.display = 'block';
+                preview.textContent = textoLimpio.slice(0, 1000) + (textoLimpio.length > 1000 ? '\n\n... [resto del contenido procesado para descarga]' : '');
+
+                // Descargar archivo
                 const nombreSalida = file.name.replace(/\.[^/.]+$/, "") + "_limpio.txt";
                 descargarTXT(textoLimpio, nombreSalida);
             };
 
-            reader.readAsText(file);
+            reader.readAsText(file, "UTF-8");
         }
 
-        function limpiarVTT(texto) {
-            const lineas = texto.split('\n');
-            const lineasLimpias = [];
+        function limpiarVTT(texto, separador) {
+            // Normalizar saltos de línea Windows/Unix
+            const lineas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+            const bloques = [];
+            let bufferBloque = [];
 
             for (let linea of lineas) {
-                linea = linea.trim();
-                
-                // Ignorar la cabecera WEBVTT
-                if (linea === 'WEBVTT') continue;
-                // Ignorar líneas vacías
-                if (linea === '') continue;
-                // Ignorar líneas de tiempo (ej. 00:03:58.160 --> 00:03:59.200)
-                if (linea.includes('-->')) continue;
-                // Ignorar identificadores UUID (ej. 40391bfc-350a-480c-afc4-32dfe4519a79-0)
-                if (/^[a-fA-F0-9\-]+-\d+$/.test(linea)) continue;
+                const lineaTrim = linea.trim();
 
-                // Añadir el texto válido
-                lineasLimpias.push(linea);
+                // Detectar separador de bloques o final de subtítulo
+                if (lineaTrim === '') {
+                    if (bufferBloque.length > 0) {
+                        bloques.push(bufferBloque.join(' '));
+                        bufferBloque = [];
+                    }
+                    continue;
+                }
+
+                // Filtrar cabeceras WEBVTT, metadatos, timestamps y UUIDs
+                if (lineaTrim.startsWith('WEBVTT') || lineaTrim.startsWith('NOTE')) continue;
+                if (lineaTrim.includes('-->')) continue;
+                // Expresión regular para UUIDs/IDs alfanuméricos típicos de VTT
+                if (/^[a-fA-F0-9\-]+(-\d+)?$/.test(lineaTrim)) continue;
+                if (/^\d+$/.test(lineaTrim)) continue;
+
+                // Limpiar posibles etiquetas de estilo inline como <v Speaker>, <c.color>, etc.
+                const textoSinTags = lineaTrim.replace(/<\/?[^>]+(>|$)/g, "");
+
+                if (textoSinTags) {
+                    bufferBloque.push(textoSinTags);
+                }
             }
 
-            // Unir el texto con un espacio para crear párrafos continuos
-            return lineasLimpias.join(' ');
+            // Si quedó algo en el buffer al final del archivo
+            if (bufferBloque.length > 0) {
+                bloques.push(bufferBloque.join(' '));
+            }
+
+            // Opcional: deduplicar líneas idénticas consecutivas (muy común en VTT generados en streaming)
+            const bloquesFiltrados = bloques.filter((texto, index) => {
+                return index === 0 || texto !== bloques[index - 1];
+            });
+
+            return bloquesFiltrados.join(separador);
         }
 
         function descargarTXT(texto, nombreArchivo) {
@@ -111,7 +183,6 @@
             document.body.appendChild(a);
             a.click();
             
-            // Limpieza
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
