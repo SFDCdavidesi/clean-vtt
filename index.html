@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 800px;
+            max-width: 820px;
             margin: 30px auto;
             padding: 20px;
             background-color: #f4f5f7;
@@ -33,13 +33,22 @@
             box-sizing: border-box;
             background: #fafafa;
         }
-        .options {
-            display: flex;
-            gap: 20px;
+        .options-group {
             margin-bottom: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             font-size: 14px;
         }
-        .options label {
+        .row-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .options-group label {
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -88,12 +97,12 @@
         }
         textarea {
             width: 100%;
-            height: 350px;
+            height: 380px;
             padding: 12px;
             box-sizing: border-box;
             border: 1px solid #ccc;
             border-radius: 6px;
-            font-family: monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
             font-size: 13px;
             line-height: 1.5;
             resize: vertical;
@@ -110,19 +119,25 @@
 
     <div class="card">
         <h2>Limpiador de Subtítulos VTT</h2>
-        <p>Sube tu archivo <code>.vtt</code> para generar la previsualización del texto antes de descargarlo.</p>
+        <p>Sube tu archivo <code>.vtt</code> para procesarlo y previsualizarlo antes de descargar.</p>
         
         <input type="file" id="fileInput" accept=".vtt">
 
-        <div class="options">
+        <div class="options-group">
             <label>
-                <input type="radio" name="formatOption" value="single" checked>
-                Salto simple (línea por línea)
+                <input type="checkbox" id="keepTimestamps">
+                <strong>Conservar marcas de tiempo</strong> (ej. <code>[00:03:58 --> 00:03:59] Texto...</code>)
             </label>
-            <label>
-                <input type="radio" name="formatOption" value="double">
-                Doble salto (párrafos separados)
-            </label>
+            <div class="row-options">
+                <label>
+                    <input type="radio" name="formatOption" value="single" checked>
+                    Salto simple (línea por línea)
+                </label>
+                <label>
+                    <input type="radio" name="formatOption" value="double">
+                    Doble salto (separar bloques con línea en blanco)
+                </label>
+            </div>
         </div>
 
         <button class="btn-primary" onclick="procesarYPrevisualizar()">Cargar y Previsualizar</button>
@@ -132,11 +147,11 @@
         <div class="preview-header">
             <div>
                 <strong id="previewFileName">archivo_limpio.txt</strong>
-                <div class="stats" id="statsText">0 párrafos | 0 caracteres</div>
+                <div class="stats" id="statsText">0 bloques procesados | 0 caracteres</div>
             </div>
             <button class="btn-secondary" onclick="descargarDesdePreview()">Descargar TXT</button>
         </div>
-        <textarea id="outputViewer" placeholder="Aquí aparecerá el texto limpio..."></textarea>
+        <textarea id="outputViewer" placeholder="Aquí aparecerá el texto procesado..."></textarea>
     </div>
 
     <script>
@@ -150,15 +165,15 @@
             }
 
             const file = input.files[0];
-            currentFileName = file.name.replace(/\.[^/.]+$/, "") + "_limpio.txt";
+            const keepTimestamps = document.getElementById('keepTimestamps').checked;
+            currentFileName = file.name.replace(/\.[^/.]+$/, "") + (keepTimestamps ? "_con_tiempos.txt" : "_limpio.txt");
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const contenido = e.target.result;
                 const separador = document.querySelector('input[name="formatOption"]:checked').value === 'double' ? '\n\n' : '\n';
-                const { texto, totalBloques } = limpiarVTT(contenido, separador);
+                const { texto, totalBloques } = limpiarVTT(contenido, separador, keepTimestamps);
 
-                // Mostrar área de previsualización
                 const previewArea = document.getElementById('previewArea');
                 const outputViewer = document.getElementById('outputViewer');
                 const statsText = document.getElementById('statsText');
@@ -175,44 +190,61 @@
             reader.readAsText(file, "UTF-8");
         }
 
-        function limpiarVTT(texto, separador) {
+        function limpiarVTT(texto, separador, mantenerTiempos) {
             const lineas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
             const bloques = [];
-            let bufferBloque = [];
+            
+            let tiempoActual = "";
+            let bufferTexto = [];
+
+            function guardarBloque() {
+                if (bufferTexto.length > 0) {
+                    const textoUnido = bufferTexto.join(' ');
+                    if (mantenerTiempos && tiempoActual) {
+                        bloques.push(`[${tiempoActual}] ${textoUnido}`);
+                    } else {
+                        bloques.push(textoUnido);
+                    }
+                    bufferTexto = [];
+                    tiempoActual = "";
+                }
+            }
 
             for (let linea of lineas) {
                 const lineaTrim = linea.trim();
 
-                // Separador entre subtítulos
+                // Separador de bloque VTT
                 if (lineaTrim === '') {
-                    if (bufferBloque.length > 0) {
-                        bloques.push(bufferBloque.join(' '));
-                        bufferBloque = [];
-                    }
+                    guardarBloque();
                     continue;
                 }
 
-                // Filtrar metadatos y etiquetas técnicas
+                // Filtrar metadatos iniciales
                 if (lineaTrim.startsWith('WEBVTT') || lineaTrim.startsWith('NOTE')) continue;
-                if (lineaTrim.includes('-->')) continue;
+
+                // Captura de timestamps
+                if (lineaTrim.includes('-->')) {
+                    // Limpiamos los milisegundos si se desea un formato más corto, o dejamos la marca limpia:
+                    tiempoActual = lineaTrim.split(' ')[0] + ' --> ' + lineaTrim.split(' ')[2];
+                    continue;
+                }
+
+                // Filtrar UUIDs o números identificadores de línea
                 if (/^[a-fA-F0-9\-]+(-\d+)?$/.test(lineaTrim)) continue;
                 if (/^\d+$/.test(lineaTrim)) continue;
 
-                // Eliminar tags HTML/VTT internos (ej: <v Persona>, <b>, etc.)
+                // Quitar etiquetas inline si existieran (ej. <v Persona>, <b>)
                 const textoLimpio = lineaTrim.replace(/<\/?[^>]+(>|$)/g, "");
-
                 if (textoLimpio) {
-                    bufferBloque.push(textoLimpio);
+                    bufferTexto.push(textoLimpio);
                 }
             }
 
-            if (bufferBloque.length > 0) {
-                bloques.push(bufferBloque.join(' '));
-            }
+            guardarBloque();
 
-            // Deduplicar repeticiones consecutivas automáticas
-            const bloquesFiltrados = bloques.filter((linea, index) => {
-                return index === 0 || linea !== bloques[index - 1];
+            // Deduplicar líneas consecutivas idénticas
+            const bloquesFiltrados = bloques.filter((item, index) => {
+                return index === 0 || item !== bloques[index - 1];
             });
 
             return {
@@ -242,4 +274,280 @@
         }
     </script>
 </body>
-</html>
+</html<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Limpiador y Previsualizador de VTT</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 820px;
+            margin: 30px auto;
+            padding: 20px;
+            background-color: #f4f5f7;
+            color: #222;
+        }
+        .card {
+            background: #ffffff;
+            padding: 25px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #111;
+        }
+        input[type="file"] {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px dashed #bbb;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+            background: #fafafa;
+        }
+        .options-group {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-size: 14px;
+        }
+        .row-options {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .options-group label {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background-color: #0b57d0;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 15px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        .btn-primary:hover {
+            background-color: #0842a0;
+        }
+        .btn-secondary {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn-secondary:hover {
+            background-color: #1557b0;
+        }
+        #previewArea {
+            display: none;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .stats {
+            font-size: 13px;
+            color: #666;
+        }
+        textarea {
+            width: 100%;
+            height: 380px;
+            padding: 12px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            resize: vertical;
+            background-color: #fafafa;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: #0b57d0;
+            background: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Limpiador de Subtítulos VTT</h2>
+        <p>Sube tu archivo <code>.vtt</code> para procesarlo y previsualizarlo antes de descargar.</p>
+        
+        <input type="file" id="fileInput" accept=".vtt">
+
+        <div class="options-group">
+            <label>
+                <input type="checkbox" id="keepTimestamps">
+                <strong>Conservar marcas de tiempo</strong> (ej. <code>[00:03:58 --> 00:03:59] Texto...</code>)
+            </label>
+            <div class="row-options">
+                <label>
+                    <input type="radio" name="formatOption" value="single" checked>
+                    Salto simple (línea por línea)
+                </label>
+                <label>
+                    <input type="radio" name="formatOption" value="double">
+                    Doble salto (separar bloques con línea en blanco)
+                </label>
+            </div>
+        </div>
+
+        <button class="btn-primary" onclick="procesarYPrevisualizar()">Cargar y Previsualizar</button>
+    </div>
+
+    <div class="card" id="previewArea">
+        <div class="preview-header">
+            <div>
+                <strong id="previewFileName">archivo_limpio.txt</strong>
+                <div class="stats" id="statsText">0 bloques procesados | 0 caracteres</div>
+            </div>
+            <button class="btn-secondary" onclick="descargarDesdePreview()">Descargar TXT</button>
+        </div>
+        <textarea id="outputViewer" placeholder="Aquí aparecerá el texto procesado..."></textarea>
+    </div>
+
+    <script>
+        let currentFileName = "subtitulos_limpio.txt";
+
+        function procesarYPrevisualizar() {
+            const input = document.getElementById('fileInput');
+            if (input.files.length === 0) {
+                alert('Por favor, selecciona un archivo .vtt primero.');
+                return;
+            }
+
+            const file = input.files[0];
+            const keepTimestamps = document.getElementById('keepTimestamps').checked;
+            currentFileName = file.name.replace(/\.[^/.]+$/, "") + (keepTimestamps ? "_con_tiempos.txt" : "_limpio.txt");
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const contenido = e.target.result;
+                const separador = document.querySelector('input[name="formatOption"]:checked').value === 'double' ? '\n\n' : '\n';
+                const { texto, totalBloques } = limpiarVTT(contenido, separador, keepTimestamps);
+
+                const previewArea = document.getElementById('previewArea');
+                const outputViewer = document.getElementById('outputViewer');
+                const statsText = document.getElementById('statsText');
+                const previewFileName = document.getElementById('previewFileName');
+
+                previewFileName.textContent = currentFileName;
+                statsText.textContent = `${totalBloques} bloques procesados | ${texto.length} caracteres`;
+                outputViewer.value = texto;
+
+                previewArea.style.display = 'block';
+                previewArea.scrollIntoView({ behavior: 'smooth' });
+            };
+
+            reader.readAsText(file, "UTF-8");
+        }
+
+        function limpiarVTT(texto, separador, mantenerTiempos) {
+            const lineas = texto.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+            const bloques = [];
+            
+            let tiempoActual = "";
+            let bufferTexto = [];
+
+            function guardarBloque() {
+                if (bufferTexto.length > 0) {
+                    const textoUnido = bufferTexto.join(' ');
+                    if (mantenerTiempos && tiempoActual) {
+                        bloques.push(`[${tiempoActual}] ${textoUnido}`);
+                    } else {
+                        bloques.push(textoUnido);
+                    }
+                    bufferTexto = [];
+                    tiempoActual = "";
+                }
+            }
+
+            for (let linea of lineas) {
+                const lineaTrim = linea.trim();
+
+                // Separador de bloque VTT
+                if (lineaTrim === '') {
+                    guardarBloque();
+                    continue;
+                }
+
+                // Filtrar metadatos iniciales
+                if (lineaTrim.startsWith('WEBVTT') || lineaTrim.startsWith('NOTE')) continue;
+
+                // Captura de timestamps
+                if (lineaTrim.includes('-->')) {
+                    // Limpiamos los milisegundos si se desea un formato más corto, o dejamos la marca limpia:
+                    tiempoActual = lineaTrim.split(' ')[0] + ' --> ' + lineaTrim.split(' ')[2];
+                    continue;
+                }
+
+                // Filtrar UUIDs o números identificadores de línea
+                if (/^[a-fA-F0-9\-]+(-\d+)?$/.test(lineaTrim)) continue;
+                if (/^\d+$/.test(lineaTrim)) continue;
+
+                // Quitar etiquetas inline si existieran (ej. <v Persona>, <b>)
+                const textoLimpio = lineaTrim.replace(/<\/?[^>]+(>|$)/g, "");
+                if (textoLimpio) {
+                    bufferTexto.push(textoLimpio);
+                }
+            }
+
+            guardarBloque();
+
+            // Deduplicar líneas consecutivas idénticas
+            const bloquesFiltrados = bloques.filter((item, index) => {
+                return index === 0 || item !== bloques[index - 1];
+            });
+
+            return {
+                texto: bloquesFiltrados.join(separador),
+                totalBloques: bloquesFiltrados.length
+            };
+        }
+
+        function descargarDesdePreview() {
+            const texto = document.getElementById('outputViewer').value;
+            if (!texto.trim()) {
+                alert('No hay texto para descargar.');
+                return;
+            }
+
+            const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            a.href = url;
+            a.download = currentFileName;
+            document.body.appendChild(a);
+            a.click();
+
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>>
